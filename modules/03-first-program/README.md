@@ -223,14 +223,17 @@ anchor build
 After building, update `declare_id!` with your actual program ID:
 
 ```rust
-declare_id!("YourActualProgramIdHere123456789");
+// IMPORTANT: Replace this with the actual program ID from:
+// solana address -k target/deploy/counter-keypair.json
+declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 ```
 
 Also update `Anchor.toml`:
 
 ```toml
 [programs.devnet]
-counter = "YourActualProgramIdHere123456789"
+# Replace with your actual program ID
+counter = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 ```
 
 ## Testing Your Program

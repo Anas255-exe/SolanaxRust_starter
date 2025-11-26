@@ -73,9 +73,11 @@ pub fn transfer_from_pda(ctx: Context<TransferFromPda>, amount: u64) -> Result<(
     let cpi_accounts = Transfer {
         from: ctx.accounts.vault_token_account.to_account_info(),
         to: ctx.accounts.user_token_account.to_account_info(),
+        authority: ctx.accounts.vault.to_account_info(),
     };
     
-    let cpi_program = ctx.accounts.system_program.to_account_info();
+    // Use token_program for SPL token transfers (not system_program)
+    let cpi_program = ctx.accounts.token_program.to_account_info();
     
     // Use CpiContext::new_with_signer for PDA signing
     let cpi_ctx = CpiContext::new_with_signer(
@@ -139,12 +141,14 @@ pub mod token_example {
     }
 }
 
+// Note: decimals is passed as an instruction parameter for flexibility
 #[derive(Accounts)]
+#[instruction(decimals: u8)]
 pub struct CreateToken<'info> {
     #[account(
         init,
         payer = payer,
-        mint::decimals = 9,
+        mint::decimals = decimals,
         mint::authority = payer,
     )]
     pub mint: Account<'info, Mint>,
@@ -323,25 +327,31 @@ pub fn secure_withdraw(ctx: Context<SecureWithdraw>, amount: u64) -> Result<()> 
 }
 ```
 
-### 4. Secure Random Number Generation
+### 4. Randomness in Solana
+
+⚠️ **Important**: On-chain randomness is challenging. Do NOT use block data (slot, timestamp) for security-sensitive operations as they can be predicted or manipulated by validators.
+
+**Recommended Solutions:**
+- **Switchboard VRF**: [https://switchboard.xyz/](https://switchboard.xyz/)
+- **Chainlink VRF**: [https://chain.link/vrf](https://chain.link/vrf)
 
 ```rust
-use anchor_lang::solana_program::sysvar::clock::Clock;
+// Example using Switchboard VRF (recommended for production)
+// See: https://docs.switchboard.xyz/solana/randomness
 
-pub fn generate_pseudo_random(ctx: Context<RandomContext>) -> Result<u64> {
-    let clock = Clock::get()?;
-    let slot = clock.slot;
-    let timestamp = clock.unix_timestamp;
+use switchboard_solana::prelude::*;
+
+pub fn request_randomness(ctx: Context<RequestRandomness>) -> Result<()> {
+    // Request randomness from Switchboard oracle
+    // The result will be delivered in a callback
+    let vrf_request = VrfRequestRandomness {
+        authority: ctx.accounts.authority.to_account_info(),
+        vrf: ctx.accounts.vrf.to_account_info(),
+        // ... other required accounts
+    };
     
-    // Combine multiple sources (NOT cryptographically secure!)
-    let seed = slot
-        .wrapping_add(timestamp as u64)
-        .wrapping_add(ctx.accounts.user.key().to_bytes()[0] as u64);
-    
-    // For true randomness, use VRF (Verifiable Random Function)
-    // See: Switchboard or Chainlink VRF
-    
-    Ok(seed)
+    vrf_request.invoke_signed(/* seeds */)?;
+    Ok(())
 }
 ```
 
@@ -413,6 +423,9 @@ pub fn update_large_account(ctx: Context<UseLargeAccount>, index: usize, value: 
 ### 3. Batch Operations
 
 ```rust
+// Define a constant for maximum batch size
+const MAX_BATCH_SIZE: usize = 10;
+
 pub fn batch_transfer(
     ctx: Context<BatchTransfer>,
     amounts: Vec<u64>,
